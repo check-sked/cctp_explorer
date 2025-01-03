@@ -3,6 +3,7 @@ from web3 import AsyncWeb3
 from web3.middleware import async_geth_poa_middleware
 from datetime import datetime
 
+# RPC setup with middleware
 def setup_web3_provider(url):
     w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url))
     w3.middleware_onion.inject(async_geth_poa_middleware, layer=0)
@@ -30,10 +31,11 @@ DOMAIN_TO_CHAIN = {
     1: 'avalanche',
     2: 'optimism',
     3: 'arbitrum',
-    4: 'solana',
-    5: 'sui',
+    4: 'noble',
+    5: 'solana',
     6: 'base',
-    7: 'polygon'
+    7: 'polygon',
+    8: 'sui'
 }
 
 CHAIN_TO_W3 = {
@@ -209,9 +211,8 @@ async def get_cctp_transfers(start_block, end_block):
                 print(f'Amount: {amount / (10 ** decimals):,.2f} {symbol}')
                 print(f'Final Recipient: {recipient}')
             else:
-                print('\nDestination transaction not found')
-        
-        print('-' * 50)
+                    print('\nStatus: Pending')
+            print('-' * 50)
 
 async def main():
     end_block = await w3_eth.eth.block_number
