@@ -65,8 +65,16 @@ def decode_uint256(hex_data):
     return int.from_bytes(hex_data, byteorder='big')
 
 def decode_address(hex_data):
-    raw_address = '0x' + hex_data[-20:].hex()
-    return AsyncWeb3.to_checksum_address(raw_address)
+    if isinstance(hex_data, str):
+        # Remove all '0x' prefixes and take last 40 chars
+        clean_hex = hex_data.replace('0x', '')
+        return AsyncWeb3.to_checksum_address('0x' + clean_hex[-40:])
+    else:
+        # If it's bytes, convert to hex string
+        hex_str = hex_data.hex()
+        if hex_str.startswith('0x'):
+            hex_str = hex_str[2:]
+        return AsyncWeb3.to_checksum_address('0x' + hex_str[-40:])
 
 async def analyze_transaction_type(w3, tx_hash, target_address):
     receipt = await w3.eth.get_transaction_receipt(tx_hash)
@@ -156,63 +164,70 @@ async def get_cctp_transfers(start_block, end_block):
     })
     
     for log in logs:
-        block = await w3_eth.eth.get_block(log['blockNumber'])
-        tx = await w3_eth.eth.get_transaction(log['transactionHash'])
-        tx_analysis = await analyze_transaction_type(w3_eth, log['transactionHash'], CIRCLE_TOKEN_MESSENGER)
-        
-        nonce = int(log['topics'][1].hex(), 16)
-        burn_token = decode_address(log['topics'][2])
-        decimals, symbol = await get_token_info(w3_eth, burn_token)
-        
-        raw_data = log['data']
-        amount = decode_uint256(raw_data[0:32])
-        mint_recipient = decode_address(raw_data[32:64])
-        destination_domain = decode_uint256(raw_data[64:96])
-        destination_chain = DOMAIN_TO_CHAIN.get(destination_domain)
-        
-        print(f'\nCCTP Transfer #{nonce}')
-        print('-' * 50)
-        print('SOURCE (Ethereum)')
-        print(f'Block: {log["blockNumber"]}')
-        print(f'Transaction hash: {log["transactionHash"].hex()}')
-        print(f'Block time: {datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S UTC")}')
-        print(f'Origin: {tx["from"]}')
-        print(f'Transfer Type: {"Direct CCTP" if tx_analysis["is_direct"] else "Part of Larger Transaction"}')
-        if not tx_analysis["is_direct"]:
-            print(f'Transaction Complexity: {tx_analysis["total_logs"]} total events')
-            print(f'First Contract: {tx_analysis["first_contract"]}')
-            print(f'CCTP Position: {tx_analysis["target_positions"][0] + 1} of {tx_analysis["total_logs"]} events')
-        print(f'Token: {symbol} ({burn_token})')
-        print(f'Amount: {amount / (10 ** decimals):,.2f} {symbol}')
-        print(f'To: {mint_recipient}')
-        print(f'Destination Chain: {destination_chain.title() if destination_chain in CHAIN_TO_W3 else f"Unsupported ({destination_domain})"}')
-        
-        if destination_chain in CHAIN_TO_W3:
-            source_time = datetime.utcfromtimestamp(block["timestamp"])
-            dest_tx = await find_destination_tx(destination_chain, nonce, source_time)
-            if dest_tx:
-                dest_block = await CHAIN_TO_W3[destination_chain].eth.get_block(dest_tx['blockNumber'])
-                dest_tx_full = await CHAIN_TO_W3[destination_chain].eth.get_transaction(dest_tx['transactionHash'])
-                dest_analysis = await analyze_transaction_type(CHAIN_TO_W3[destination_chain], dest_tx['transactionHash'], MESSAGE_TRANSMITTERS[destination_chain])
-                
-                token, recipient, _ = decode_message_body(dest_tx['data'])
-                
-                print(f'\nDESTINATION ({destination_chain.title()})')
-                print(f'Block: {dest_tx["blockNumber"]}')
-                print(f'Transaction hash: {dest_tx["transactionHash"].hex()}')
-                print(f'Block time: {datetime.utcfromtimestamp(dest_block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S UTC")}')
-                print(f'Receiver: {dest_tx_full["from"]}')
-                print(f'Transfer Type: {"Direct CCTP" if dest_analysis["is_direct"] else "Part of Larger Transaction"}')
-                if not dest_analysis["is_direct"]:
-                    print(f'Transaction Complexity: {dest_analysis["total_logs"]} total events')
-                    print(f'First Contract: {dest_analysis["first_contract"]}')
-                    print(f'CCTP Position: {dest_analysis["target_positions"][0] + 1} of {dest_analysis["total_logs"]} events')
-                print(f'Token: {symbol} (Native {destination_chain.title()} {symbol})')
-                print(f'Amount: {amount / (10 ** decimals):,.2f} {symbol}')
-                print(f'Final Recipient: {recipient}')
-            else:
+        try:
+            block = await w3_eth.eth.get_block(log['blockNumber'])
+            tx = await w3_eth.eth.get_transaction(log['transactionHash'])
+            tx_analysis = await analyze_transaction_type(w3_eth, log['transactionHash'], CIRCLE_TOKEN_MESSENGER)
+            
+            # Convert topics to proper format
+            nonce = int(log['topics'][1].hex(), 16)
+            topic2_hex = log['topics'][2].hex()
+            burn_token = AsyncWeb3.to_checksum_address('0x' + topic2_hex[-40:])
+            
+            decimals, symbol = await get_token_info(w3_eth, burn_token)
+            
+            raw_data = log['data']
+            amount = decode_uint256(raw_data[0:32])
+            mint_recipient = decode_address(raw_data[32:64])
+            destination_domain = decode_uint256(raw_data[64:96])
+            destination_chain = DOMAIN_TO_CHAIN.get(destination_domain)
+            
+            print(f'\nCCTP Transfer #{nonce}')
+            print('-' * 50)
+            print('SOURCE (Ethereum)')
+            print(f'Block: {log["blockNumber"]}')
+            print(f'Transaction hash: {log["transactionHash"].hex()}')
+            print(f'Block time: {datetime.utcfromtimestamp(block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S UTC")}')
+            print(f'Origin: {tx["from"]}')
+            print(f'Transfer Type: {"Direct CCTP" if tx_analysis["is_direct"] else "Part of Larger Transaction"}')
+            if not tx_analysis["is_direct"]:
+                print(f'Transaction Complexity: {tx_analysis["total_logs"]} total events')
+                print(f'First Contract: {tx_analysis["first_contract"]}')
+                print(f'CCTP Position: {tx_analysis["target_positions"][0] + 1} of {tx_analysis["total_logs"]} events')
+            print(f'Token: {symbol} ({burn_token})')
+            print(f'Amount: {amount / (10 ** decimals):,.2f} {symbol}')
+            print(f'To: {mint_recipient}')
+            print(f'Destination Chain: {destination_chain.title() if destination_chain in CHAIN_TO_W3 else f"Unsupported ({destination_domain})"}')
+            
+            if destination_chain in CHAIN_TO_W3:
+                source_time = datetime.utcfromtimestamp(block["timestamp"])
+                dest_tx = await find_destination_tx(destination_chain, nonce, source_time)
+                if dest_tx:
+                    dest_block = await CHAIN_TO_W3[destination_chain].eth.get_block(dest_tx['blockNumber'])
+                    dest_tx_full = await CHAIN_TO_W3[destination_chain].eth.get_transaction(dest_tx['transactionHash'])
+                    dest_analysis = await analyze_transaction_type(CHAIN_TO_W3[destination_chain], dest_tx['transactionHash'], MESSAGE_TRANSMITTERS[destination_chain])
+                    
+                    token, recipient, _ = decode_message_body(dest_tx['data'])
+                    
+                    print(f'\nDESTINATION ({destination_chain.title()})')
+                    print(f'Block: {dest_tx["blockNumber"]}')
+                    print(f'Transaction hash: {dest_tx["transactionHash"].hex()}')
+                    print(f'Block time: {datetime.utcfromtimestamp(dest_block["timestamp"]).strftime("%Y-%m-%d %H:%M:%S UTC")}')
+                    print(f'Receiver: {dest_tx_full["from"]}')
+                    print(f'Transfer Type: {"Direct CCTP" if dest_analysis["is_direct"] else "Part of Larger Transaction"}')
+                    if not dest_analysis["is_direct"]:
+                        print(f'Transaction Complexity: {dest_analysis["total_logs"]} total events')
+                        print(f'First Contract: {dest_analysis["first_contract"]}')
+                        print(f'CCTP Position: {dest_analysis["target_positions"][0] + 1} of {dest_analysis["total_logs"]} events')
+                    print(f'Token: {symbol} (Native {destination_chain.title()} {symbol})')
+                    print(f'Amount: {amount / (10 ** decimals):,.2f} {symbol}')
+                    print(f'Final Recipient: {recipient}')
+                else:
                     print('\nStatus: Pending')
             print('-' * 50)
+        except Exception as e:
+            print(f"Error processing log: {str(e)}")
+            continue
 
 async def main():
     end_block = await w3_eth.eth.block_number
