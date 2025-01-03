@@ -1,3 +1,5 @@
+# Run to see examples of burn > mint pairs
+
 import asyncio
 from web3 import AsyncWeb3
 from web3.middleware import async_geth_poa_middleware
@@ -5,13 +7,11 @@ from datetime import datetime
 import aiohttp
 import json
 
-# RPC setup with middleware
 def setup_web3_provider(url):
     w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(url))
     w3.middleware_onion.inject(async_geth_poa_middleware, layer=0)
     return w3
 
-# Setup providers
 w3_eth = setup_web3_provider('https://eth-mainnet.g.alchemy.com/v2/AMsnqGqzMboS_tNkYDeec0MleUfhykIR')
 w3_base = setup_web3_provider('https://base-mainnet.g.alchemy.com/v2/AMsnqGqzMboS_tNkYDeec0MleUfhykIR')
 w3_op = setup_web3_provider('https://opt-mainnet.g.alchemy.com/v2/AMsnqGqzMboS_tNkYDeec0MleUfhykIR')
