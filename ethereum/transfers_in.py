@@ -13,6 +13,8 @@ w3_eth = setup_web3_provider('https://eth-mainnet.g.alchemy.com/v2/AMsnqGqzMboS_
 
 MESSAGE_TRANSMITTER = AsyncWeb3.to_checksum_address('0x0a992d191deec32afe36203ad87d7d289a738f81')
 MESSAGE_RECEIVED_EVENT = '0x58200b4c34ae05ee816d710053fff3fb75af4395915d3d2a771b24aa10e3cc5d'
+USDC_ADDRESS = AsyncWeb3.to_checksum_address('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')  # USDC on Ethereum
+TRANSFER_EVENT = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'  # Transfer(address,address,uint256)
 
 DOMAIN_TO_CHAIN = {
     0: 'ethereum', 1: 'avalanche', 2: 'optimism', 3: 'arbitrum',
@@ -32,6 +34,10 @@ def decode_address(hex_data):
             hex_str = hex_str[2:]
         return AsyncWeb3.to_checksum_address('0x' + hex_str[-40:])
 
+def decode_amount(hex_data):
+    amount_wei = int.from_bytes(hex_data, byteorder='big')
+    return amount_wei / 1_000_000  # Convert from 6 decimals to normal units
+
 async def get_cctp_transfers_in(start_block, end_block, output_file):
     with open(output_file, 'w', newline='') as f:
         writer = csv.writer(f)
@@ -44,7 +50,8 @@ async def get_cctp_transfers_in(start_block, end_block, output_file):
             'nonce',
             'sender',
             'recipient',
-            'complexity'
+            'complexity',
+            'amount'
         ])
     
     logs = await w3_eth.eth.get_logs({
@@ -74,6 +81,14 @@ async def get_cctp_transfers_in(start_block, end_block, output_file):
             
             source_chain = DOMAIN_TO_CHAIN.get(source_domain, f"Unknown ({source_domain})")
             
+            # Find USDC transfer in the receipt logs
+            usdc_amount = 0
+            for receipt_log in receipt['logs']:
+                if (receipt_log['address'].lower() == USDC_ADDRESS.lower() and 
+                    receipt_log['topics'][0].hex() == TRANSFER_EVENT):
+                    usdc_amount = decode_amount(receipt_log['data'])
+                    break
+
             with open(output_file, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
@@ -85,10 +100,11 @@ async def get_cctp_transfers_in(start_block, end_block, output_file):
                     nonce,
                     sender,
                     recipient,
-                    complexity
+                    complexity,
+                    usdc_amount
                 ])
             
-            print(f"Processed incoming transfer #{nonce} from {source_chain} in block {log['blockNumber']}")
+            print(f"Processed incoming transfer #{nonce} from {source_chain} in block {log['blockNumber']}: {usdc_amount} USDC")
             
         except Exception as e:
             print(f"Error processing log: {str(e)}")
