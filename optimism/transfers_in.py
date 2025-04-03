@@ -9,7 +9,7 @@ def setup_web3_provider(url):
     w3.middleware_onion.inject(async_geth_poa_middleware, layer=0)
     return w3
 
-w3_eth = setup_web3_provider('https://opt-mainnet.g.alchemy.com/v2/AMsnqGqzMboS_tNkYDeec0MleUfhykIR')
+w3_eth = setup_web3_provider('https://opt-mainnet.g.alchemy.com/v2/<API_KEY>')
 
 MESSAGE_TRANSMITTER = AsyncWeb3.to_checksum_address('0x4d41f22c5a0e5c74090899e5a8fb597a8842b3e8')
 MESSAGE_RECEIVED_EVENT = '0x58200b4c34ae05ee816d710053fff3fb75af4395915d3d2a771b24aa10e3cc5d'
