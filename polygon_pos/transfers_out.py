@@ -9,7 +9,7 @@ def setup_web3_provider(url):
     w3.middleware_onion.inject(async_geth_poa_middleware, layer=0)
     return w3
 
-w3_eth = setup_web3_provider('https://polygon-mainnet.g.alchemy.com/v2/AMsnqGqzMboS_tNkYDeec0MleUfhykIR')
+w3_eth = setup_web3_provider('https://polygon-mainnet.g.alchemy.com/v2/<API_KEY>')
 
 CIRCLE_TOKEN_MESSENGER = AsyncWeb3.to_checksum_address('0x9daF8c91AEFAE50b9c0E69629D3F6Ca40cA3B3FE')
 MESSAGE_SENT_EVENT = '0x2fa9ca894982930190727e75500a97d8dc500233a5065e0f3126c48fbe0343c0'
